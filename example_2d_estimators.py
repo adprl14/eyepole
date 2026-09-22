@@ -1,11 +1,11 @@
-"""Minimal example of the two EyePole 2-D estimators."""
+"""Minimal example of the EyePole 2-D estimator."""
 
 import numpy as np
 
 from eyepole import EyePole2D
 
 
-# Positions are deliberately simple here: four electrodes surrounding the eye.
+# Four electrodes surrounding the eye. Positions are relative to the eye center.
 electrodes_mm = {
     "R": [30.0, 0.0, 0.0],
     "L": [-30.0, 0.0, 0.0],
@@ -21,16 +21,16 @@ model = EyePole2D(
     gain=1.0,
 )
 
-# In real use, eog would be your measured array with shape
-# (n_samples, 2), ordered as [R-L, U-D].
+# In real use, eog is your measured array with shape (n_samples, 2),
+# ordered here as [R-L, U-D].
 eog = np.zeros((100, 2))
 
 # ---------------------------------------------------------------------------
-# 1) Unconstrained 2-D estimate.
+# Default: unconstrained 2-D estimate.
 # ---------------------------------------------------------------------------
-# This estimates p_x and p_y directly. There is no assumption about p_z or the
-# total three-dimensional magnitude.
-free_result = model.estimate_unconstrained(
+# This estimates p_x and p_y directly. There is no assumption about p_z or
+# about the total three-dimensional dipole magnitude.
+free_result = model.estimate(
     eog,
     process_noise=1e-4,
     measurement_noise=1e-3,
@@ -39,12 +39,14 @@ free_result = model.estimate_unconstrained(
 free_xy = free_result.dipole_xy
 
 # ---------------------------------------------------------------------------
-# 2) Constant-magnitude estimate.
+# Optional: enforce a constant 3-D dipole magnitude.
 # ---------------------------------------------------------------------------
-# The state is still only [p_x, p_y], but the forward component is reconstructed
-# from ||p|| = 1 and p_z > 0 before the near-field physics are evaluated.
-constrained_result = model.estimate_constant_magnitude(
+# The estimated state is still only [p_x, p_y]. With constrained=True, p_z is
+# reconstructed from ||p|| = 1 and p_z > 0 before the near-field physics are
+# evaluated.
+constrained_result = model.estimate(
     eog,
+    constrained=True,
     dipole_magnitude=1.0,
     process_noise=1e-4,
     measurement_noise=1e-3,

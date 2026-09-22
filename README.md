@@ -193,22 +193,26 @@ model = EyePole2D(
 )
 ```
 
-### Unconstrained 2-D estimate
+### Estimate the 2-D dipole
+
+The default is an unconstrained 2-D estimate:
 
 ```python
-result = model.estimate_unconstrained(eog)
+result = model.estimate(eog)
 p_xy = result.dipole_xy
 ```
 
 This uses the two horizontal/vertical columns of the physics-derived far-field
 lead field. It does not infer `p_z` and does not assume a constant 3-D dipole
-magnitude.
+magnitude. In other words, `constrained=False` is the default.
 
-### Constant-magnitude estimate
+To enforce a constant three-dimensional magnitude, use the same method with
+`constrained=True`:
 
 ```python
-result = model.estimate_constant_magnitude(
+result = model.estimate(
     eog,
+    constrained=True,
     dipole_magnitude=1.0,
 )
 

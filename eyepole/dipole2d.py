@@ -4,14 +4,11 @@ This module provides two related ways to estimate eye-dipole motion when the
 recording montage mainly observes horizontal and vertical EOG (for example,
 R-L and U-D) and does not provide an independent front-back channel.
 
-The two estimators intentionally answer slightly different questions:
-
-1. ``estimate_unconstrained`` estimates ``[p_x, p_y]`` directly with no
-   assumption about the total three-dimensional dipole magnitude. This is a
-   linear two-dimensional point-dipole model and is useful as a simple baseline.
-
-2. ``estimate_constant_magnitude`` also estimates only ``[p_x, p_y]``, but
-   reconstructs the forward component from a known total magnitude ``p0``:
+The main user-facing method is ``estimate``. By default,
+``estimate(..., constrained=False)`` estimates ``[p_x, p_y]`` directly with no
+assumption about the total three-dimensional dipole magnitude. Setting
+``constrained=True`` still estimates only ``[p_x, p_y]``, but reconstructs the
+forward component from a known total magnitude ``p0``:
 
        p_z = +sqrt(p0**2 - p_x**2 - p_y**2)
 
@@ -219,6 +216,125 @@ class EyePole2D:
                 y = C_xy @ [p_x, p_y].
         """
         return self.far_model.C[:, :2]
+
+    def estimate(
+        self,
+        eog: np.ndarray,
+        constrained: bool = False,
+        dipole_magnitude: float = 1.0,
+        process_noise: float | np.ndarray = 1e-4,
+        measurement_noise: float | np.ndarray = 1e-3,
+        smooth: bool = True,
+        initial_xy: np.ndarray | None = None,
+        initial_covariance: float | np.ndarray | None = None,
+        jacobian_step: float = 1e-5,
+    ) -> Dipole2DResult:
+        """Estimate the eye dipole from horizontal/vertical EOG.
+
+        This is the main user-facing estimation method. By default it estimates
+        an unconstrained two-dimensional dipole ``[p_x, p_y]``. Set
+        ``constrained=True`` to enforce a constant three-dimensional dipole
+        magnitude while still estimating only the two observable components.
+
+        Parameters
+        ----------
+        eog : numpy.ndarray, shape (n_samples, n_channels)
+            EOG time series. Columns must have the same order as
+            :attr:`channel_names`.
+
+        constrained : bool, default=False
+            Select which state model to use.
+
+            If ``False``, estimate ``[p_x, p_y]`` directly with the linear
+            physics-derived far-field observation model. No value of ``p_z``
+            or total 3-D dipole magnitude is assumed.
+
+            If ``True``, estimate ``[p_x, p_y]`` while enforcing
+
+                p_x**2 + p_y**2 + p_z**2 = dipole_magnitude**2
+
+            with a positive forward component
+
+                p_z = +sqrt(dipole_magnitude**2 - p_x**2 - p_y**2).
+
+            The reconstructed 3-D dipole is then evaluated with the selected
+            physics model (near field by default).
+
+        dipole_magnitude : float, default=1.0
+            Constant magnitude of the full 3-D dipole when
+            ``constrained=True``. This parameter is ignored when
+            ``constrained=False``.
+
+            If the main goal is eye direction rather than an absolute dipole
+            moment in physical units, ``1.0`` is a convenient normalization.
+
+        process_noise : float or numpy.ndarray, default=1e-4
+            Random-walk process covariance ``Q`` for ``[p_x, p_y]``. A scalar
+            means ``Q = process_noise * I``. This is a variance.
+
+        measurement_noise : float or numpy.ndarray, default=1e-3
+            EOG measurement covariance ``R``. A scalar means equal independent
+            channel variance.
+
+        smooth : bool, default=True
+            If ``True``, run an RTS backward smoother after the forward filter.
+
+        initial_xy : numpy.ndarray or None, shape (2,), default=None
+            Optional initial value of ``[p_x, p_y]``. If omitted, the first EOG
+            sample is inverted with the linear far-field model.
+
+        initial_covariance : float or numpy.ndarray or None, default=None
+            Initial state covariance. ``None`` uses the 2 x 2 identity matrix.
+
+        jacobian_step : float, default=1e-5
+            Relative finite-difference step used by the constrained nonlinear
+            estimator. It is ignored when ``constrained=False``.
+
+        Returns
+        -------
+        result : Dipole2DResult
+            Filtered and optionally smoothed dipole estimates.
+
+            ``result.dipole_xy`` is always available. If
+            ``constrained=True``, ``result.dipole_xyz()`` also returns the full
+            constant-magnitude 3-D dipole with positive ``p_z``.
+
+        Examples
+        --------
+        The default is the simple unconstrained 2-D model::
+
+            result = model.estimate(eog)
+            p_xy = result.dipole_xy
+
+        To enforce constant magnitude::
+
+            result = model.estimate(
+                eog,
+                constrained=True,
+                dipole_magnitude=1.0,
+            )
+            p_xyz = result.dipole_xyz()
+        """
+        if constrained:
+            return self.estimate_constant_magnitude(
+                eog=eog,
+                dipole_magnitude=dipole_magnitude,
+                process_noise=process_noise,
+                measurement_noise=measurement_noise,
+                smooth=smooth,
+                initial_xy=initial_xy,
+                initial_covariance=initial_covariance,
+                jacobian_step=jacobian_step,
+            )
+
+        return self.estimate_unconstrained(
+            eog=eog,
+            process_noise=process_noise,
+            measurement_noise=measurement_noise,
+            smooth=smooth,
+            initial_xy=initial_xy,
+            initial_covariance=initial_covariance,
+        )
 
     def estimate_unconstrained(
         self,

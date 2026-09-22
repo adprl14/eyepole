@@ -26,4 +26,4 @@ __all__ = [
     "xy_to_constant_magnitude_xyz",
 ]
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
